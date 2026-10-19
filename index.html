@@ -3415,6 +3415,47 @@
       };
 
       let appState = JSON.parse(JSON.stringify(DEFAULT_STATE));
+
+      function loadPersistedState() {
+        try {
+          const raw = localStorage.getItem('almai_ads_state');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              if (Array.isArray(parsed.registeredUsers)) {
+                appState.registeredUsers = parsed.registeredUsers;
+              }
+              if (parsed.isAuthenticated && parsed.currentUser) {
+                appState.isAuthenticated = true;
+                appState.currentUser = parsed.currentUser;
+              }
+              if (parsed.financialSummary) {
+                appState.financialSummary = Object.assign({}, appState.financialSummary, parsed.financialSummary);
+              }
+              if (Array.isArray(parsed.submissions)) {
+                appState.submissions = parsed.submissions;
+              }
+              if (Array.isArray(parsed.transactions)) {
+                appState.transactions = parsed.transactions;
+              }
+              if (Array.isArray(parsed.withdrawals)) {
+                appState.withdrawals = parsed.withdrawals;
+              }
+              if (Array.isArray(parsed.packagePaymentRequests)) {
+                appState.packagePaymentRequests = parsed.packagePaymentRequests;
+              }
+              if (Array.isArray(parsed.campaigns) && parsed.campaigns.length > 0) {
+                appState.campaigns = parsed.campaigns;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load almai_ads_state:', e);
+        }
+      }
+
+      // Restore session and data on initial script evaluation
+      loadPersistedState();
       let currentActiveObjectUrl = null;
       let activeTaskFilter = 'CURRENT';
 
@@ -3946,6 +3987,9 @@
             pkgTextEl.textContent = pkgLabels[u.activePackage] || (u.activePackage ? u.activePackage + ' Tier' : 'No Active Plan');
           }
 
+          const dashWelcomeEl = document.getElementById('dash-user-welcome');
+          if (dashWelcomeEl) dashWelcomeEl.textContent = u.name || 'Publisher';
+
           const sideUserEl = document.getElementById('sidebar-user-name');
           if (sideUserEl) sideUserEl.textContent = u.name;
           const sidePhoneEl = document.getElementById('sidebar-user-phone');
@@ -4066,6 +4110,9 @@
         });
 
         closeMobileSidebar();
+        try {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        } catch (e) {}
       }
 
       function openMobileSidebar() {
@@ -5028,7 +5075,7 @@
         updateActivationBanner();
         if (typeof renderAdminPackageRequests === "function") renderAdminPackageRequests();
 
-        const userPackage = appState.currentUser.activePackage || 'STARTER';
+        const userPackage = (appState.currentUser && appState.currentUser.activePackage) || 'STARTER';
         const pkgNames = { STARTER: 'Starter Package', GROWTH: 'Growth Package', PREMIUM: 'Premium Package' };
         const headerPkgText = document.getElementById('header-pkg-text');
         if (headerPkgText) headerPkgText.textContent = pkgNames[userPackage] || userPackage;
@@ -5122,7 +5169,14 @@
           if (navTarget) {
             e.preventDefault();
             const viewName = navTarget.getAttribute('data-nav');
-            if (viewName) switchView(viewName);
+            if (viewName) {
+              // When logged in, clicking the brand logo or home brings the user to their dashboard
+              if (viewName === 'landing' && appState.isAuthenticated && appState.currentUser) {
+                switchView('dashboard');
+              } else {
+                switchView(viewName);
+              }
+            }
           }
         });
 
@@ -5883,22 +5937,37 @@
           });
         }
 
-        // Form User Login Submit
+        // Form User Login Submit & Button Click
+        function triggerLoginSubmit() {
+          const phone = document.getElementById('login-phone') ? document.getElementById('login-phone').value.trim() : '';
+          const pass = document.getElementById('login-password') ? document.getElementById('login-password').value : '';
+
+          if (!phone || !pass) {
+            showAuthError('login-error-msg', 'Please enter your phone number and password.');
+            return;
+          }
+
+          loginUser(phone, pass);
+        }
+
         const formLogin = document.getElementById('form-user-login');
         if (formLogin) {
           formLogin.addEventListener('submit', function (e) {
             e.preventDefault();
-            const phone = document.getElementById('login-phone').value.trim();
-            const pass = document.getElementById('login-password').value;
-
-            if (!phone || !pass) {
-              showAuthError('login-error-msg', 'Please enter your phone number and password.');
-              return;
-            }
-
-            loginUser(phone, pass);
+            triggerLoginSubmit();
           });
         }
+
+        const btnSubmitLogin = document.getElementById('btn-submit-login');
+        if (btnSubmitLogin) {
+          btnSubmitLogin.addEventListener('click', function (e) {
+            e.preventDefault();
+            triggerLoginSubmit();
+          });
+        }
+
+        // Load persisted credentials and state
+        loadPersistedState();
 
         // Initialize Auth UI state
         updateAuthStateUI();
@@ -5906,8 +5975,8 @@
         // Initialize First View Render
         refreshAllViews();
 
-        // Start on landing page unless user was already logged in
-        if (appState.isAuthenticated) {
+        // STRICT VIEW ROUTING: Authenticated users ALWAYS see their Dashboard, visitors see Landing
+        if (appState.isAuthenticated && appState.currentUser) {
           switchView('dashboard');
         } else {
           switchView('landing');
@@ -5991,7 +6060,7 @@
         Create your publisher account to download authorized brand adverts, post to your WhatsApp Status, and earn verified M-Pesa payouts.
       </p>
 
-      <form id="form-user-register" novalidate>
+      <form id="form-user-register" onsubmit="return false;" novalidate>
         <div class="form-group">
           <label class="form-label" for="reg-name">Full Name<span class="req">*</span></label>
           <input type="text" class="form-control" id="reg-name" placeholder="e.g. Grace Mwangi" required>
@@ -6067,7 +6136,7 @@
 
       
 
-      <form id="form-user-login" novalidate>
+      <form id="form-user-login" onsubmit="return false;" novalidate>
         <div class="form-group" style="margin-bottom: 0.7rem;">
           <label class="form-label" for="login-phone" style="font-size: 0.78rem; font-weight: 700; color: var(--color-heading); margin-bottom: 0.25rem;">Phone Number<span class="req">*</span></label>
           <input type="tel" class="form-control" id="login-phone" placeholder="e.g. 0712 345 678" required>
