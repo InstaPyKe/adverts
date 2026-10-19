@@ -1,0 +1,17 @@
+# =============================================================================
+# ALMAI ADS - CLOUDFLARE PAGES & D1 CONFIGURATION
+# Platform: Almai Ads (https://almai.co.ke)
+# =============================================================================
+
+name = "almai-ads"
+compatibility_date = "2026-10-19"
+pages_build_output_dir = "."
+
+# Direct Cloudflare D1 Database Binding
+# When creating your database in Cloudflare dashboard or via CLI:
+#   npx wrangler d1 create almai-ads-db
+# Paste the resulting database_id below:
+[[d1_databases]]
+binding = "DB"
+database_name = "almai-ads-db"
+database_id = "your-d1-database-uuid"
